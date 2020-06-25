@@ -2,27 +2,71 @@
 <html>
 <head>
   <meta charset=utf-8>
-  <title>Connect Four</title>
+  <title>Pong</title>
   <style type="text/css">
-    #nemopan {
-      background-color: #0000CD;
+    #gameframe {
+      background-color: #EEFFFF;
       position: absolute;
-      left: 50px;
-      top: 50px;      
+      left: 0px;
+      top: 0px;      
+      width: 720px; 
+      height: 520px;
     }
-    #winner {
-	  position: absolute;
-	  left: 50px;
-	  top: 650px;
+    #pongpan {
+      position: absolute;
+      left: 0px;
+      top: 0px;      
+    }
+    #scoreMe {
+      position: absolute;
+      left: 100px;
+      top: 20px;
+      color: white;
+    }
+    #scoreAI {
+      position: absolute;
+      left: 450px;
+      top: 20px;
+      color: white;
     }
   </style>
 </head>
 <body>
-  <canvas id="nemopan" width="700" height="600">
-  </canvas>
-  <div id="winner"></div>
+  <div id="gameframe" >
+    <canvas id="pongpan" width="700" height="500">
+    </canvas>
+  </div>
+  <div id="scoreMe" ></div>
+  <div id="scoreAI" ></div>
   <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
   <script type="text/javascript">
+    const LINETHICKNESS = 10;
+    const PADDLE_SIZE = 50;
+    const PADDLE_OFFSET = 20;
+    const PAN_WIDTH = 700;
+    const PAN_HEIGHT = 500;
+    const COLL_FACTOR = 0.5;
+    const BOUNCE_FACTOR = 0.9;
+    
+    var canvas;
+    var context;
+    
+	var playerOnePosition = PAN_HEIGHT/2;
+	var playerTwoPosition = PAN_HEIGHT/2;
+	var ball = {
+			radius: LINETHICKNESS/2,
+			x: PAN_WIDTH/2 - LINETHICKNESS/2,
+			y: PAN_HEIGHT/2 - LINETHICKNESS/2,
+			dirX: -1, // -1 = left 1 = right
+			dirY: -1, // -1 = up 1 = down
+			speedX: 2,
+			speedY: 2
+		};
+    var paddle1 = new Paddle(PADDLE_OFFSET, playerOnePosition);
+    var paddle2 = new Paddle(PAN_WIDTH - PADDLE_OFFSET - LINETHICKNESS, playerTwoPosition);
+	var scoreMe = 0;
+	var scoreAI = 0;
+    
   	function Point(x, y){
 		this.x = x;
 		this.y = y;
@@ -35,6 +79,35 @@
 		this.contains = function(p1) {
 			return this.x < p1.x && p1.x < this.x+this.width
 			&& this.y < p1.y && p1.y < this.y+this.height;
+		}
+    }
+    function Paddle(x, y) {
+		this.x = x;
+		this.y = y;
+		this.oldY = y;
+		this.inBoundY = function() {
+			if (this.y-PADDLE_SIZE/2 < LINETHICKNESS) {
+				this.y = PADDLE_SIZE/2 + LINETHICKNESS;
+			}
+			else if (this.y+PADDLE_SIZE/2 > PAN_HEIGHT - LINETHICKNESS) {
+				this.y = PAN_HEIGHT - LINETHICKNESS - PADDLE_SIZE/2;
+			}
+		}
+		this.move = function(dy) {
+			this.oldY = this.y; 
+		    this.y += dy;
+		    this.inBoundY();
+		}
+		this.moveTo = function(y) {
+			this.oldY = this.y; 
+		    this.y = y;
+		    this.inBoundY();
+		}
+		this.speedY = function() {
+			return this.y - this.oldY;
+		}
+		this.drawPaddle = function() {
+			drawFillRect(context, "white", new Tile(this.x, this.y-PADDLE_SIZE/2, LINETHICKNESS, PADDLE_SIZE));
 		}
     }
 	function drawLine(ctx, width, color, from, to) {
@@ -53,233 +126,166 @@
 		ctx.closePath(); 
 		ctx.fill();
 	}
-
-	function drawO(ctx, color, tile) {
-		var cen = new Point(tile.x + 0.5*tile.width, tile.y + 0.5*tile.height);
-		var rad = Math.min(tile.width, tile.height)*0.35;
-		drawCircle(ctx, color, cen, rad);
+	function drawRect(ctx, width, color, tile){
+		ctx.lineWidth = width;
+		ctx.strokeStyle = color;
+		ctx.beginPath();
+		ctx.rect(tile.x, tile.y, tile.width, tile.height);
+		ctx.closePath(); 
+		ctx.stroke();
 	}
-	function findMousePointTile(p1) {
-		for (var i=0; i<colRegion.length; ++i) {
-			if (colRegion[i].contains(p1)) {
-				return i;
-			}
-		}
-		return -1;
+	function drawFillRect(ctx, color, tile){
+		ctx.fillStyle = color;
+		ctx.fillRect(tile.x, tile.y, tile.width, tile.height);
+		ctx.fill();
 	}
-	function findMousePointCol(p1) {
-		for (var i=0; i<colRegion.length; ++i) {
-			if (colRegion[i].contains(p1)) {
-				return i;
-			}
-		}
-		return -1;
+	function drawArena() {
+		drawFillRect(context, "black", new Tile(0,0,PAN_WIDTH,PAN_HEIGHT));
+		drawRect(context, LINETHICKNESS*2, "white", new Tile(0,0,PAN_WIDTH,PAN_HEIGHT));
+		drawLine(context, LINETHICKNESS/4, "white", new Point(PAN_WIDTH/2,0), new Point(PAN_WIDTH/2,PAN_HEIGHT));
+		//drawLine(context, LINETHICKNESS/4, "white", new Point(0,PAN_HEIGHT/2), new Point(PAN_WIDTH,PAN_HEIGHT/2));
 	}
-	function doMouseClick(mouseEvent) {
-		var obj = $("#nemopan")[0];
-	  	var objleft = 0;
-	  	var objtop = 0;
-	  	var xpos;
-	  	var ypos;
-	  	while (obj.offsetParent) {
-	    	objleft += obj.offsetLeft;
-	    	objtop += obj.offsetTop;
-	    	obj = obj.offsetParent;
-	  	}
-	 	xpos = mouseEvent.pageX - objleft;
-	  	ypos = mouseEvent.pageY - objtop;
-	  	//console.log(xpos + ", " + ypos);
-	  	//$("#coord").text(xpos + ", " + ypos);
-	  	var col = findMousePointCol(new Point(xpos, ypos))
-	  	// find lowest empty position of col
-	  	var bot = 0;
-	  	for (var i=_ROW-1; i>=0; --i) {
-	  		if (tileStatus[i][col]==0) {
-	  			bot = i;
-	  			break;
-	  		}
-	  	}
-	  	//console.log("col=",col,"bot=",bot);
-
-	  	stage++;
-	  	if (stage%2 == 0) {
-	  		tileStatus[bot][col] = 2;
-	  	}
-	  	else {
-	  		tileStatus[bot][col] = 1;
-	  	}
-
-	  	displayGamePan();
-		///*
-		var winner = checkWinner(bot, col);
-		if (winner!=0) {
-			var mark = ["", "Yellow", "Red"];
-			$("#winner").text("Winner is " + mark[winner]);
-			canvas[0].onmousedown = doNothing;
-		}
-		//*/
+	function drawBall(ball) {
+		//drawCircle(context, "white", new Point(ball.x, ball.y), ball.radius);
+		drawFillRect(context, "white", new Tile(ball.x, ball.y, LINETHICKNESS, LINETHICKNESS));
 	}
-	function checkWinner(ro, co) {
-		var winner = tileStatus[ro][co];
-		// case N-S 
-		var lcount = 0;
-		var rcount = 0;
-		var k = 1;
-		while (ro+k < _ROW) {
-			if (winner == tileStatus[ro+k][co]) {
-				lcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		if (lcount+rcount+1 >= 4)
-			return winner;
-		// case W-E
-		winner = tileStatus[ro][co]
-		lcount = 0;
-		k = 1;
-		while (co-k >= 0) {
-			if (winner == tileStatus[ro][co-k]) {
-				lcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		rcount = 0;
-		k = 1;
-		while (co+k < _COL) {
-			if (winner == tileStatus[ro][co+k]) {
-				rcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		if (lcount+rcount+1 >= 4)
-			return winner;
-		
-		// case NE-SW	
-		winner = tileStatus[ro][co]
-		lcount = 0;
-		k = 1;
-		while (co-k >= 0 && ro+k < _ROW) {
-			if (winner == tileStatus[ro+k][co-k]) {
-				lcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		rcount = 0;
-		k = 1;
-		while (co+k < _COL && ro-k >= 0) {
-			if (winner == tileStatus[ro-k][co+k]) {
-				rcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		if (lcount+rcount+1 >= 4)
-			return winner;
-		
-		// case NW-SE	
-		winner = tileStatus[ro][co]
-		lcount = 0;
-		k = 1;
-		while (co-k >= 0 && ro-k >= 0) {
-			if (winner == tileStatus[ro-k][co-k]) {
-				lcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		rcount = 0;
-		k = 1;
-		while (co+k < _COL && ro+k < _ROW) {
-			if (winner == tileStatus[ro+k][co+k]) {
-				rcount++;
-			}
-			else
-				break;
-			k++;
-		}
-		if (lcount+rcount+1 >= 4)
-			return winner;
-		
-		return 0; // no winner
-	}
-	function displayGamePan() {
-		for (var i=0; i<_ROW; ++i) {
-			for (var j=0; j<_COL; ++j) {
-				if (tileStatus[i][j]==1) {
-					drawO(context, "yellow", tile2d[i][j]);
-				}
-				else if (tileStatus[i][j]==2) {
-					drawO(context, "red", tile2d[i][j]);
-				}
-			}
-		}
-	}
-	function doNothing(mouseEvent) {
-		$("#winner").text("Game Finished -- Try new Game");
-	}
-
-	var _COL = 7;
-	var _ROW = 6;
-	var canvas;
-	var tile2d;
-	var context;
-	var tileStatus = [
-		[0,0,0,0,0,0,0],
-		[0,0,0,0,0,0,0],
-		[0,0,0,0,0,0,0],
-		[0,0,0,0,0,0,0],
-		[0,0,0,0,0,0,0],
-		[0,0,0,0,0,0,0]
-	];
-	var colRegion = new Array(_COL);
-	var stage = 0;
 	
-	
+	function handleMouseMove(evt) {
+		
+		paddle1.y = evt.clientY;
+		if (paddle1.y-PADDLE_SIZE/2 < LINETHICKNESS) {
+			paddle1.y = PADDLE_SIZE/2 + LINETHICKNESS;
+		}
+		else if (paddle1.y+PADDLE_SIZE/2 > PAN_HEIGHT - LINETHICKNESS) {
+			paddle1.y = PAN_HEIGHT - LINETHICKNESS - PADDLE_SIZE/2;
+		}
+	}
+	function moveBall(ball) {
+	    ball.x += (ball.dirX * ball.speedX);
+	    ball.y += (ball.dirY * ball.speedY);
+	}
+	function checkEdgeCollision(ball) {
+	    if (ball.y <= (LINETHICKNESS) || ball.y+LINETHICKNESS >= (PAN_HEIGHT - LINETHICKNESS)) {
+	        ball.dirY = -ball.dirY;
+	    }
+	    if (ball.x <= (LINETHICKNESS) || ball.x+LINETHICKNESS >= (PAN_WIDTH - LINETHICKNESS))
+	        ball.dirX = -ball.dirX;
+	}
+	function checkHitBall() {
+	    if (ball.dirX === -1 && 
+	    	ball.x <= paddle1.x+LINETHICKNESS && ball.x >= paddle1.x  &&
+	    	paddle1.y-PADDLE_SIZE/2 < ball.y+LINETHICKNESS && 
+	    	paddle1.y+PADDLE_SIZE/2 > ball.y) {
+	    	// hit by paddle1
+	    	chgDir = -1;
+	    	if (ball.dirY > 0) {
+	    		// ball goes down
+	    		ball.speedY += COLL_FACTOR*paddle1.speedY();
+	    	}
+	    	else {
+	    		ball.speedY -= COLL_FACTOR*paddle1.speedY();
+	    	}	    	
+	    	if (ball.speedY < 0) {
+	    		ball.speedY = -ball.speedY;
+	    		ball.dirY = -ball.dirY;
+	    	}
+	    	console.log("paddle1 speedY=", paddle1.speedY(), "ball speedY*dirY=", ball.speedY*ball.dirY);
+	    }
+	    else if (ball.dirX === 1 && 
+	    	paddle2.x <= ball.x+LINETHICKNESS && paddle2.x+LINETHICKNESS >= ball.x &&
+	    	paddle2.y-PADDLE_SIZE/2  < ball.y+LINETHICKNESS &&
+	    	paddle2.y+PADDLE_SIZE/2 > ball.y) {
+	    	// hit by paddle 2
+	    	chgDir = -1;
+	    	if (ball.dirY > 0) {
+	    		// ball goes down
+	    		ball.speedY += COLL_FACTOR*paddle2.speedY();
+	    	}
+	    	else {
+	    		ball.speedY -= COLL_FACTOR*paddle2.speedY();
+	    	}
+	    	if (ball.speedY < 0) {
+	    		ball.speedY = -ball.speedY;
+	    		ball.dirY = -ball.dirY;
+	    	}
+	    	console.log("paddle2 speedY=", paddle2.speedY(), "ball speedY*dirY=", ball.speedY*ball.dirY);
+	    }
+	    else {
+	    	chgDir = 1;
+	    }
+	    ball.dirX *= chgDir;
+	}
+	function checkPointScored() {
+	    // 1 point for AI if left wall is hit
+	    if (ball.x <= LINETHICKNESS) 
+	        scoreAI += 1;
+	    // 1 points for Me if right wall is hit
+	    else if (ball.x+LINETHICKNESS >= PAN_WIDTH - LINETHICKNESS)
+	        scoreMe += 1;
+	} 
+	function artificialIntelligenceLeft(paddle) {
+	    // If ball is moving away from paddle, center bat
+	    if (ball.dirX > 0) {
+	        if (paddle.y < (PAN_HEIGHT/2))
+	            paddle.move(1);
+	        else if (paddle.y > (PAN_HEIGHT/2))
+	            paddle.move(-1);
+	    }
+	    // if ball moving towards bat, track its movement. 
+	    else if (ball.dirX < 0) {
+	        if (paddle.y < ball.y+LINETHICKNESS/2)
+	            paddle.move(Math.round(4*Math.random()));
+	        else
+	            paddle.move(-Math.round(4*Math.random()));
+	    }
+	}
+	function artificialIntelligenceRight(paddle) {
+	    // If ball is moving away from paddle, center bat
+	    if (ball.dirX < 0) {
+	        if (paddle.y < (PAN_HEIGHT/2))
+	            paddle.move(1);
+	        else if (paddle2.y > (PAN_HEIGHT/2))
+	            paddle.move(-1);
+	    }
+	    // if ball moving towards bat, track its movement. 
+	    else if (ball.dirX > 0) {
+	        if (paddle.y < ball.y+LINETHICKNESS/2)
+	            paddle.move(2);
+	        else
+	            paddle.move(-2);
+	    }
+	}
+	function displayScores() {
+	    $("#scoreMe").html("Score AI-1 = "+scoreMe);
+	    $("#scoreAI").html("Score AI-2 = "+scoreAI);
+	}
+	function mainLoop() {
+		drawArena();
+	    drawBall(ball);
+	    paddle1.drawPaddle();
+	    paddle2.drawPaddle();
+	    moveBall(ball);
+	    checkEdgeCollision(ball);
+	    checkPointScored();
+	    checkHitBall();
+	    displayScores();
+	    artificialIntelligenceLeft(paddle1);
+	    artificialIntelligenceRight(paddle2);
+	    setTimeout(mainLoop, 1000/100);
+	}
 	$(document).ready(function() {
 		
-		canvas = $("#nemopan");
+		canvas = $("#pongpan");
 		context = canvas.get(0).getContext("2d");
 		
-		var canvasWidth = canvas.width();
-		var canvasHeight = canvas.height();
+		drawArena();
+	    drawBall(ball);
+	    paddle1.drawPaddle();
+	    paddle2.drawPaddle();
 
-		var wdiv7 = canvasWidth / _COL;
-		var hdiv6 = canvasHeight / _ROW;
-		
-		tile2d = new Array(_ROW);
-		// init 6x7 tile
-		for (var i = 0; i < _ROW; ++i) {
-			var top = i*hdiv6;
-			tile2d[i] = new Array(_COL);
-			for (var j=0; j < _COL; ++j) {
-				var left = j*wdiv7;
-				tile2d[i][j] = new Tile(left, top, wdiv7, hdiv6);
-			}			
-		}
-		// init Column Click Region
-		for (var j=0; j < _COL; ++j) {
-			var left = j*wdiv7;
-			colRegion[j] = new Tile(left, 0, wdiv7, canvasHeight);
-		}
-		// init Panel Draw
-		for (var i=0; i<_ROW; ++i) {
-			for ( var j=0; j<_COL; ++j) {
-				drawO(context, "white", tile2d[i][j]);
-				tileStatus[i][j] = 0;
-			}
-		}
-		
-		canvas[0].onmousedown = doMouseClick;
+		canvas[0].onmousemove = handleMouseMove;
+	    
+	    setTimeout(mainLoop, 500);
 
 	});
   </script>

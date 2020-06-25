@@ -12,7 +12,7 @@ circle_list = [
     [0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0]
 ]
-turn = 2
+turn = 1
 
 def draw():
   screen.clear()
@@ -32,9 +32,9 @@ def draw():
   elif turn == 2:
     screen.draw.text("player 2's turn",(830,30))
   elif turn == 3:
-    screen.draw.text("player 1 win",(830,30))
-  elif turn == 4:
     screen.draw.text("player 2 win",(830,30))
+  elif turn == 4:
+    screen.draw.text("player 1 win",(830,30))
 
 def on_mouse_down(pos):
   global turn
@@ -87,7 +87,7 @@ def on_mouse_down(pos):
   
 def update():
   global turn
-  draw()
+  
   if win_check(turn):
     turn = turn + 2
 
@@ -123,6 +123,8 @@ def paint(x):
     else:
       circle_list[floor][x] = turn
       break
+  
+  
   
 
 pgzrun.go()
